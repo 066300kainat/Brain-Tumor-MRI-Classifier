@@ -1,44 +1,125 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
+
+const API_URL = "http://127.0.0.1:8000";
+
+const CLASS_NAMES = [
+  "Glioma",
+  "Meningioma",
+  "No Tumor",
+  "Pituitary",
+];
+
+type Page = "dashboard" | "analysis" | "history" | "settings";
 
 interface PredictionResult {
   success: boolean;
   filename: string;
   prediction: string;
   confidence: number;
-  probabilities: {
-    Glioma: number;
-    Meningioma: number;
-    "No Tumor": number;
-    Pituitary: number;
-  };
+  probabilities: Record<string, number>;
+}
+
+interface HistoryItem extends PredictionResult {
+  id: string;
+  date: string;
 }
 
 function App() {
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [page, setPage] = useState<Page>("dashboard");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState("");
   const [result, setResult] = useState<PredictionResult | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [apiOnline, setApiOnline] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState("");
-  const [activePage, setActivePage] = useState("Dashboard");
+  const [showConfidence, setShowConfidence] = useState(true);
 
-  const handleFileChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const selectedFile = event.target.files?.[0];
+  useEffect(() => {
+    const savedHistory = localStorage.getItem("brain-tumor-history");
+    const savedSettings = localStorage.getItem("brain-tumor-settings");
 
-    if (!selectedFile) return;
+    if (savedHistory) {
+      try {
+        setHistory(JSON.parse(savedHistory));
+      } catch {
+        setHistory([]);
+      }
+    }
 
-    setFile(selectedFile);
-    setPreview(URL.createObjectURL(selectedFile));
-    setResult(null);
-    setError("");
-    setActivePage("MRI Analysis");
+    if (savedSettings) {
+      try {
+        const settings = JSON.parse(savedSettings);
+        setShowConfidence(settings.showConfidence ?? true);
+      } catch {
+        setShowConfidence(true);
+      }
+    }
+
+    checkApi();
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("brain-tumor-history", JSON.stringify(history));
+  }, [history]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "brain-tumor-settings",
+      JSON.stringify({ showConfidence })
+    );
+  }, [showConfidence]);
+
+  const checkApi = async () => {
+    try {
+      const response = await fetch(`${API_URL}/health`);
+      const data = await response.json();
+      setApiOnline(data.success === true);
+    } catch {
+      setApiOnline(false);
+    }
   };
 
-  const analyzeMRI = async () => {
-    if (!file) {
-      setError("Please upload an MRI image before starting the analysis.");
+  const handleFile = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setError("Please select a valid image file.");
+      return;
+    }
+
+    setError("");
+    setResult(null);
+    setSelectedFile(file);
+
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+  };
+
+  const handleFileInput = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+
+    if (file) {
+      handleFile(file);
+    }
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragActive(false);
+
+    const file = event.dataTransfer.files?.[0];
+
+    if (file) {
+      handleFile(file);
+    }
+  };
+
+  const analyzeImage = async () => {
+    if (!selectedFile) {
+      setError("Please upload an MRI image first.");
       return;
     }
 
@@ -46,17 +127,14 @@ function App() {
     setError("");
     setResult(null);
 
-    const formData = new FormData();
-    formData.append("file", file);
-
     try {
-      const response = await fetch(
-        "http://127.0.0.1:8000/predict",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      const response = await fetch(`${API_URL}/predict`, {
+        method: "POST",
+        body: formData,
+      });
 
       const data = await response.json();
 
@@ -65,1005 +143,927 @@ function App() {
       }
 
       setResult(data);
+
+      const historyItem: HistoryItem = {
+        ...data,
+        id: crypto.randomUUID(),
+        date: new Date().toLocaleString(),
+      };
+
+      setHistory((previous) => [historyItem, ...previous]);
+
+      setPage("analysis");
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Unable to connect to the FastAPI server.");
-      }
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to connect to the prediction API."
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const resetScan = () => {
-    setFile(null);
-    setPreview(null);
+  const clearAnalysis = () => {
+    setSelectedFile(null);
+    setPreviewUrl("");
     setResult(null);
     setError("");
   };
 
-  const getConfidenceLevel = (confidence: number) => {
-    if (confidence >= 90) return "High confidence";
-    if (confidence >= 70) return "Moderate confidence";
-    return "Low confidence";
+  const totalAnalyses = history.length;
+
+  const averageConfidence = useMemo(() => {
+    if (!history.length) return null;
+
+    const total = history.reduce(
+      (sum, item) => sum + item.confidence,
+      0
+    );
+
+    return total / history.length;
+  }, [history]);
+
+  const distribution = useMemo(() => {
+    return CLASS_NAMES.map((name) => ({
+      name,
+      count: history.filter((item) => item.prediction === name).length,
+    }));
+  }, [history]);
+
+  const navigate = (nextPage: Page) => {
+    setPage(nextPage);
+    setError("");
   };
 
-  const probabilityData = result
-    ? Object.entries(result.probabilities)
-    : [
-        ["Glioma", 42],
-        ["Meningioma", 28],
-        ["No Tumor", 18],
-        ["Pituitary", 12],
-      ];
-
   return (
-    <div className="app">
+    <div className="app-shell">
 
       {/* SIDEBAR */}
       <aside className="sidebar">
 
-        <div className="sidebar-logo">
-          <div className="logo-icon">+</div>
+        <div className="brand">
+          <div className="brand-mark">N</div>
 
           <div>
-            <strong>NeuroScan</strong>
-            <span>AI MEDICAL IMAGING</span>
+            <div className="brand-name">NeuroScan</div>
+            <div className="brand-subtitle">AI MRI ANALYTICS</div>
           </div>
         </div>
 
-        <div className="sidebar-section">
-          <span className="sidebar-label">MAIN MENU</span>
+        <div className="menu-section">
+          <div className="menu-title">MAIN MENU</div>
 
           <button
-            className={`side-link ${
-              activePage === "Dashboard" ? "active" : ""
+            className={`nav-item ${
+              page === "dashboard" ? "active" : ""
             }`}
-            onClick={() => setActivePage("Dashboard")}
+            onClick={() => navigate("dashboard")}
           >
-            <span className="side-icon">⌂</span>
-            Dashboard
+            <span className="nav-icon">▦</span>
+            <span>Dashboard</span>
           </button>
 
           <button
-            className={`side-link ${
-              activePage === "MRI Analysis" ? "active" : ""
+            className={`nav-item ${
+              page === "analysis" ? "active" : ""
             }`}
-            onClick={() => setActivePage("MRI Analysis")}
+            onClick={() => navigate("analysis")}
           >
-            <span className="side-icon">◉</span>
-            MRI Analysis
+            <span className="nav-icon">◉</span>
+            <span>MRI Analysis</span>
           </button>
 
           <button
-            className={`side-link ${
-              activePage === "Scan History" ? "active" : ""
+            className={`nav-item ${
+              page === "history" ? "active" : ""
             }`}
-            onClick={() => setActivePage("Scan History")}
+            onClick={() => navigate("history")}
           >
-            <span className="side-icon">▣</span>
-            Scan History
-          </button>
-        </div>
-
-        <div className="sidebar-section">
-          <span className="sidebar-label">ANALYTICS</span>
-
-          <button
-            className={`side-link ${
-              activePage === "Analytics" ? "active" : ""
-            }`}
-            onClick={() => setActivePage("Analytics")}
-          >
-            <span className="side-icon">◒</span>
-            Classification Analytics
-          </button>
-
-          <button
-            className={`side-link ${
-              activePage === "Performance" ? "active" : ""
-            }`}
-            onClick={() => setActivePage("Performance")}
-          >
-            <span className="side-icon">↗</span>
-            Model Performance
+            <span className="nav-icon">↺</span>
+            <span>History</span>
           </button>
         </div>
 
-        <div className="sidebar-section">
-          <span className="sidebar-label">SYSTEM</span>
+        <div className="menu-section system-section">
+          <div className="menu-title">SYSTEM</div>
 
           <button
-            className={`side-link ${
-              activePage === "Model" ? "active" : ""
+            className={`nav-item ${
+              page === "settings" ? "active" : ""
             }`}
-            onClick={() => setActivePage("Model")}
+            onClick={() => navigate("settings")}
           >
-            <span className="side-icon">◇</span>
-            Model Information
-          </button>
-
-          <button
-            className={`side-link ${
-              activePage === "Settings" ? "active" : ""
-            }`}
-            onClick={() => setActivePage("Settings")}
-          >
-            <span className="side-icon">⚙</span>
-            Settings
+            <span className="nav-icon">⚙</span>
+            <span>Settings</span>
           </button>
         </div>
 
         <div className="sidebar-bottom">
-
-          <div className="api-box">
-            <span className="online-dot"></span>
+          <div className="model-mini-card">
+            <div className="model-mini-icon">AI</div>
 
             <div>
-              <strong>API Online</strong>
-              <span>FastAPI connected</span>
+              <strong>MobileNetV2</strong>
+              <span>4-class classifier</span>
             </div>
           </div>
 
-          <div className="user-profile">
-            <div className="avatar">KZ</div>
+          <div className="api-status">
+            <span
+              className={`status-dot ${
+                apiOnline ? "online" : "offline"
+              }`}
+            />
 
-            <div>
-              <strong>Kainat Zafar</strong>
-              <span>AI Developer</span>
-            </div>
-
-            <span className="profile-more">•••</span>
+            <span>
+              {apiOnline ? "API Connected" : "API Offline"}
+            </span>
           </div>
-
         </div>
       </aside>
 
+      {/* MAIN */}
+      <main className="main-content">
 
-      {/* MAIN AREA */}
-      <div className="dashboard">
-
-        {/* TOPBAR */}
+        {/* TOP BAR */}
         <header className="topbar">
-
-          <div>
-            <div className="breadcrumb">
-              NeuroScan <span>/</span> Dashboard
-            </div>
-
-            <h1>{activePage}</h1>
-
-            <p>
-              AI-powered brain MRI classification overview
-            </p>
+          <div className="breadcrumb">
+            <span>NeuroScan</span>
+            <b>/</b>
+            <strong>
+              {page === "dashboard"
+                ? "Dashboard"
+                : page === "analysis"
+                ? "MRI Analysis"
+                : page === "history"
+                ? "History"
+                : "Settings"}
+            </strong>
           </div>
 
-          <div className="topbar-actions">
-
-            <button className="icon-button">
-              ⌕
-            </button>
-
-            <button className="icon-button notification">
-              ♧
-              <span></span>
-            </button>
-
-            <div className="top-user">
-              <div className="avatar small-avatar">KZ</div>
-
-              <div>
-                <strong>Kainat Zafar</strong>
-                <span>AI Developer</span>
-              </div>
-
-              <span>⌄</span>
+          <div className="topbar-right">
+            <div className="system-pill">
+              <span className="status-dot online" />
+              System Online
             </div>
 
+            <div className="user-avatar">KZ</div>
           </div>
-
         </header>
 
-
-        {/* DASHBOARD CONTENT */}
-        <main className="dashboard-content">
-
-          {/* KPI CARDS */}
-          <section className="stats-grid">
-
-            <div className="stat-card">
-              <div className="stat-top">
-                <span className="stat-icon blue">◉</span>
-                <span className="trend positive">+12.5%</span>
-              </div>
-
-              <span className="stat-label">
-                Total Scans
-              </span>
-
-              <strong className="stat-number">
-                1,248
-              </strong>
-
-              <span className="stat-description">
-                Compared with last month
-              </span>
-            </div>
-
-            <div className="stat-card">
-              <div className="stat-top">
-                <span className="stat-icon purple">✦</span>
-                <span className="trend neutral">Model</span>
-              </div>
-
-              <span className="stat-label">
-                Model Accuracy
-              </span>
-
-              <strong className="stat-number">
-                84.44%
-              </strong>
-
-              <span className="stat-description">
-                Test dataset accuracy
-              </span>
-            </div>
-
-            <div className="stat-card">
-              <div className="stat-top">
-                <span className="stat-icon cyan">◇</span>
-                <span className="trend neutral">4 types</span>
-              </div>
-
-              <span className="stat-label">
-                Classification Classes
-              </span>
-
-              <strong className="stat-number">
-                4
-              </strong>
-
-              <span className="stat-description">
-                MRI categories supported
-              </span>
-            </div>
-
-            <div className="stat-card">
-              <div className="stat-top">
-                <span className="stat-icon green">✓</span>
-                <span className="trend positive">Active</span>
-              </div>
-
-              <span className="stat-label">
-                Average Confidence
-              </span>
-
-              <strong className="stat-number">
-                91.8%
-              </strong>
-
-              <span className="stat-description">
-                Across analyzed scans
-              </span>
-            </div>
-
-          </section>
-
-
-          {/* ANALYTICS ROW */}
-          <section className="analytics-grid">
-
-            {/* PIE CHART */}
-            <div className="dashboard-card classification-card">
-
-              <div className="card-header">
-                <div>
-                  <span className="card-kicker">
-                    ANALYTICS
-                  </span>
-
-                  <h2>
-                    Classification Distribution
-                  </h2>
-
-                  <p>
-                    Distribution of MRI classifications
-                  </p>
-                </div>
-
-                <button className="more-button">
-                  •••
-                </button>
-              </div>
-
-              <div className="pie-layout">
-
-                <div className="pie-chart">
-
-                  <div className="pie-center">
-                    <strong>1,248</strong>
-                    <span>Total Scans</span>
-                  </div>
-
-                </div>
-
-                <div className="pie-legend">
-
-                  {probabilityData.map(
-                    ([name, value], index) => (
-                      <div
-                        className="legend-item"
-                        key={name}
-                      >
-                        <div className="legend-left">
-                          <span
-                            className={`legend-dot dot-${index}`}
-                          ></span>
-
-                          <span>{name}</span>
-                        </div>
-
-                        <strong>
-                          {value}%
-                        </strong>
-                      </div>
-                    )
-                  )}
-
-                </div>
-
-              </div>
-
-            </div>
-
-
-            {/* BAR CHART */}
-            <div className="dashboard-card">
-
-              <div className="card-header">
-
-                <div>
-                  <span className="card-kicker">
-                    MODEL OUTPUT
-                  </span>
-
-                  <h2>
-                    Prediction Confidence
-                  </h2>
-
-                  <p>
-                    Confidence by classification
-                  </p>
-                </div>
-
-                <button className="more-button">
-                  •••
-                </button>
-
-              </div>
-
-              <div className="bar-chart">
-
-                {[
-                  ["Glioma", 96.2],
-                  ["Meningioma", 88.4],
-                  ["No Tumor", 94.7],
-                  ["Pituitary", 91.3],
-                ].map(([name, value]) => (
-
-                  <div
-                    className="bar-item"
-                    key={name}
-                  >
-
-                    <div className="bar-label">
-                      <span>{name}</span>
-                      <strong>{value}%</strong>
-                    </div>
-
-                    <div className="bar-track">
-
-                      <div
-                        className="bar-fill"
-                        style={{
-                          width: `${value}%`,
-                        }}
-                      ></div>
-
-                    </div>
-
-                  </div>
-
-                ))}
-
-              </div>
-
-            </div>
-
-          </section>
-
-
-          {/* SECOND ANALYTICS ROW */}
-          <section className="analytics-grid second-row">
-
-            {/* LINE CHART */}
-            <div className="dashboard-card activity-card">
-
-              <div className="card-header">
-
-                <div>
-                  <span className="card-kicker">
-                    ACTIVITY
-                  </span>
-
-                  <h2>
-                    Scan Activity
-                  </h2>
-
-                  <p>
-                    MRI scans processed over recent months
-                  </p>
-                </div>
-
-                <div className="activity-growth">
-                  +18.4%
-                  <span>vs previous period</span>
-                </div>
-
-              </div>
-
-              <div className="line-chart">
-
-                <div className="chart-grid-line line-1"></div>
-                <div className="chart-grid-line line-2"></div>
-                <div className="chart-grid-line line-3"></div>
-                <div className="chart-grid-line line-4"></div>
-
-                <div className="chart-line">
-                  <span className="point p1"></span>
-                  <span className="point p2"></span>
-                  <span className="point p3"></span>
-                  <span className="point p4"></span>
-                  <span className="point p5"></span>
-                  <span className="point p6"></span>
-                </div>
-
-              </div>
-
-              <div className="chart-months">
-                <span>Apr</span>
-                <span>May</span>
-                <span>Jun</span>
-                <span>Jul</span>
-                <span>Aug</span>
-                <span>Sep</span>
-              </div>
-
-            </div>
-
-
-            {/* MODEL PERFORMANCE */}
-            <div className="dashboard-card performance-card">
-
-              <div className="card-header">
-
-                <div>
-                  <span className="card-kicker">
-                    MODEL
-                  </span>
-
-                  <h2>
-                    Model Performance
-                  </h2>
-
-                  <p>
-                    Evaluation metrics
-                  </p>
-                </div>
-
-              </div>
-
-              <div className="performance-list">
-
-                <div className="performance-item">
-                  <div>
-                    <span>Accuracy</span>
-                    <strong>84.44%</strong>
-                  </div>
-
-                  <div className="performance-track">
-                    <span style={{ width: "84.44%" }}></span>
-                  </div>
-                </div>
-
-                <div className="performance-item">
-                  <div>
-                    <span>Precision</span>
-                    <strong>83.90%</strong>
-                  </div>
-
-                  <div className="performance-track">
-                    <span style={{ width: "83.9%" }}></span>
-                  </div>
-                </div>
-
-                <div className="performance-item">
-                  <div>
-                    <span>Recall</span>
-                    <strong>82.70%</strong>
-                  </div>
-
-                  <div className="performance-track">
-                    <span style={{ width: "82.7%" }}></span>
-                  </div>
-                </div>
-
-                <div className="performance-item">
-                  <div>
-                    <span>F1 Score</span>
-                    <strong>83.20%</strong>
-                  </div>
-
-                  <div className="performance-track">
-                    <span style={{ width: "83.2%" }}></span>
-                  </div>
-                </div>
-
-              </div>
-
-            </div>
-
-          </section>
-
-
-          {/* MRI ANALYSIS */}
-          <section className="dashboard-card analysis-dashboard">
-
-            <div className="card-header">
-
+        {/* DASHBOARD */}
+        {page === "dashboard" && (
+          <section className="page-content">
+
+            <div className="page-heading">
               <div>
-                <span className="card-kicker">
-                  MRI ANALYSIS
-                </span>
+                <div className="eyebrow">AI MEDICAL IMAGING</div>
 
-                <h2>
-                  Analyze a Brain MRI
-                </h2>
+                <h1>Analytics Dashboard</h1>
 
                 <p>
-                  Upload an MRI scan and run the trained
-                  MobileNetV2 classifier.
+                  Monitor your MRI classification model and
+                  analysis activity.
                 </p>
               </div>
 
-              {file && (
-                <button
-                  className="reset-button"
-                  onClick={resetScan}
-                >
-                  ↻ New Scan
-                </button>
+              <button
+                className="primary-button"
+                onClick={() => navigate("analysis")}
+              >
+                <span>＋</span>
+                Analyze MRI
+              </button>
+            </div>
+
+            {/* STAT CARDS */}
+            <div className="stats-grid">
+
+              <div className="stat-card">
+                <div className="stat-top">
+                  <span className="stat-icon blue">◈</span>
+                  <span className="stat-label">MODEL ACCURACY</span>
+                </div>
+
+                <div className="stat-value">84.44%</div>
+                <div className="stat-description">
+                  Test dataset performance
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-top">
+                  <span className="stat-icon purple">⌁</span>
+                  <span className="stat-label">TOTAL ANALYSES</span>
+                </div>
+
+                <div className="stat-value">
+                  {totalAnalyses}
+                </div>
+
+                <div className="stat-description">
+                  Saved in this browser
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-top">
+                  <span className="stat-icon green">✓</span>
+                  <span className="stat-label">AVG. CONFIDENCE</span>
+                </div>
+
+                <div className="stat-value">
+                  {averageConfidence !== null
+                    ? `${averageConfidence.toFixed(1)}%`
+                    : "—"}
+                </div>
+
+                <div className="stat-description">
+                  From completed analyses
+                </div>
+              </div>
+
+              <div className="stat-card">
+                <div className="stat-top">
+                  <span className="stat-icon orange">◆</span>
+                  <span className="stat-label">MODEL CLASSES</span>
+                </div>
+
+                <div className="stat-value">4</div>
+
+                <div className="stat-description">
+                  Brain MRI categories
+                </div>
+              </div>
+
+            </div>
+
+            <div className="dashboard-grid">
+
+              {/* MODEL OVERVIEW */}
+              <div className="card model-overview">
+
+                <div className="card-header">
+                  <div>
+                    <h2>Model Overview</h2>
+                    <p>Current classifier configuration</p>
+                  </div>
+
+                  <span className="active-badge">
+                    <span className="status-dot online" />
+                    Active
+                  </span>
+                </div>
+
+                <div className="model-overview-body">
+
+                  <div className="model-symbol">
+                    AI
+                  </div>
+
+                  <div className="model-info">
+                    <h3>MobileNetV2</h3>
+
+                    <p>
+                      Transfer-learning image classification
+                      model trained for four MRI image categories.
+                    </p>
+
+                    <div className="model-details">
+
+                      <div>
+                        <span>Input</span>
+                        <strong>224 × 224</strong>
+                      </div>
+
+                      <div>
+                        <span>Classes</span>
+                        <strong>4</strong>
+                      </div>
+
+                      <div>
+                        <span>Framework</span>
+                        <strong>TensorFlow</strong>
+                      </div>
+
+                      <div>
+                        <span>Accuracy</span>
+                        <strong>84.44%</strong>
+                      </div>
+
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* QUICK ANALYSIS */}
+              <div className="card quick-card">
+
+                <div className="card-header">
+                  <div>
+                    <h2>Quick Analysis</h2>
+                    <p>Start a new MRI classification</p>
+                  </div>
+
+                  <span className="card-icon">◉</span>
+                </div>
+
+                <div className="quick-content">
+
+                  <div className="upload-mini-icon">
+                    ↑
+                  </div>
+
+                  <h3>Upload an MRI scan</h3>
+
+                  <p>
+                    Use the AI classifier to analyze a JPG,
+                    JPEG, PNG, or WEBP image.
+                  </p>
+
+                  <button
+                    className="secondary-button full"
+                    onClick={() => navigate("analysis")}
+                  >
+                    Open MRI Analysis
+                    <span>→</span>
+                  </button>
+
+                </div>
+              </div>
+
+            </div>
+
+            {/* STATISTICS */}
+            <div className="card statistics-card">
+
+              <div className="card-header">
+                <div>
+                  <h2>Analysis Statistics</h2>
+                  <p>
+                    Distribution of your completed classifications
+                  </p>
+                </div>
+
+                <span className="card-icon">◔</span>
+              </div>
+
+              {history.length === 0 ? (
+                <div className="empty-statistics">
+
+                  <div className="empty-icon">◌</div>
+
+                  <h3>No analysis statistics yet</h3>
+
+                  <p>
+                    Run your first MRI analysis to populate the
+                    dashboard with real classification statistics.
+                  </p>
+
+                  <button
+                    className="secondary-button"
+                    onClick={() => navigate("analysis")}
+                  >
+                    Start Analysis
+                  </button>
+
+                </div>
+              ) : (
+                <div className="charts-area">
+
+                  <div className="donut-wrapper">
+                    <div
+                      className="donut"
+                      style={{
+                        background: createDonutGradient(
+                          distribution
+                        ),
+                      }}
+                    >
+                      <div className="donut-center">
+                        <strong>{history.length}</strong>
+                        <span>Analyses</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="distribution-list">
+
+                    {distribution.map((item, index) => (
+                      <div
+                        className="distribution-item"
+                        key={item.name}
+                      >
+                        <div className="distribution-name">
+                          <span
+                            className={`legend-dot legend-${index}`}
+                          />
+                          <span>{item.name}</span>
+                        </div>
+
+                        <strong>{item.count}</strong>
+                      </div>
+                    ))}
+
+                  </div>
+
+                </div>
               )}
 
             </div>
 
-            <div className="analysis-workspace">
+          </section>
+        )}
 
-              <label className="upload-box">
+        {/* ANALYSIS */}
+        {page === "analysis" && (
+          <section className="page-content">
 
-                {preview ? (
+            <div className="page-heading">
+              <div>
+                <div className="eyebrow">AI MEDICAL IMAGING</div>
 
-                  <div className="preview-area">
+                <h1>MRI Analysis</h1>
 
-                    <img
-                      src={preview}
-                      alt="Uploaded MRI"
-                    />
+                <p>
+                  Upload a brain MRI image and run the
+                  MobileNetV2 classifier.
+                </p>
+              </div>
+            </div>
 
-                    <div className="preview-status">
-                      ✓ MRI Loaded
-                    </div>
+            <div className="analysis-layout">
 
-                    <div className="change-image">
-                      Click to replace
-                    </div>
+              {/* UPLOAD */}
+              <div className="card upload-card">
 
-                  </div>
-
-                ) : (
-
-                  <div className="upload-empty">
-
-                    <div className="upload-symbol">
-                      ↑
-                    </div>
-
-                    <h3>
-                      Upload MRI Scan
-                    </h3>
-
+                <div className="card-header">
+                  <div>
+                    <h2>Upload MRI Scan</h2>
                     <p>
-                      Drag & drop your image here or
-                      <strong> browse files</strong>
+                      Supported formats: JPG, JPEG, PNG, WEBP
                     </p>
-
-                    <div className="format-list">
-                      <span>JPG</span>
-                      <span>JPEG</span>
-                      <span>PNG</span>
-                    </div>
-
-                    <small>
-                      Maximum recommended image quality
-                    </small>
-
                   </div>
+                </div>
 
+                <div
+                  className={`drop-zone ${
+                    dragActive ? "drag-active" : ""
+                  } ${selectedFile ? "has-file" : ""}`}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setDragActive(true);
+                  }}
+                  onDragLeave={() => setDragActive(false)}
+                  onDrop={handleDrop}
+                >
+
+                  {selectedFile ? (
+                    <div className="preview-area">
+
+                      <img
+                        src={previewUrl}
+                        alt="MRI preview"
+                        className="mri-preview"
+                      />
+
+                      <div className="file-name">
+                        {selectedFile.name}
+                      </div>
+
+                      <div className="file-size">
+                        {(selectedFile.size / 1024).toFixed(1)} KB
+                      </div>
+
+                      <label className="change-file">
+                        Change image
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileInput}
+                          hidden
+                        />
+                      </label>
+
+                    </div>
+                  ) : (
+                    <>
+                      <div className="upload-icon-large">
+                        ↑
+                      </div>
+
+                      <h3>Drop your MRI scan here</h3>
+
+                      <p>or select an image from your computer</p>
+
+                      <label className="secondary-button">
+                        Choose MRI Image
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileInput}
+                          hidden
+                        />
+                      </label>
+                    </>
+                  )}
+
+                </div>
+
+                {error && (
+                  <div className="error-message">
+                    {error}
+                  </div>
                 )}
 
-                <input
-                  type="file"
-                  accept=".jpg,.jpeg,.png"
-                  onChange={handleFileChange}
-                />
+                <button
+                  className="primary-button analyze-button"
+                  disabled={!selectedFile || loading}
+                  onClick={analyzeImage}
+                >
+                  {loading ? (
+                    <>
+                      <span className="spinner" />
+                      Analyzing MRI...
+                    </>
+                  ) : (
+                    <>
+                      ◉
+                      Analyze MRI
+                    </>
+                  )}
+                </button>
 
-              </label>
+              </div>
 
+              {/* RESULT */}
+              <div className="card result-card">
 
-              <div className="analysis-result">
+                <div className="card-header">
+                  <div>
+                    <h2>Analysis Result</h2>
+                    <p>Classification output</p>
+                  </div>
+
+                  {result && (
+                    <span className="result-badge">
+                      Complete
+                    </span>
+                  )}
+                </div>
 
                 {!result ? (
+                  <div className="result-empty">
 
-                  <div className="empty-result">
-
-                    <div className="result-icon">
-                      ✦
+                    <div className="result-empty-icon">
+                      ◎
                     </div>
 
-                    <h3>
-                      Analysis Result
-                    </h3>
+                    <h3>Waiting for analysis</h3>
 
                     <p>
-                      Upload an MRI image to view the
-                      AI classification and probability
-                      distribution.
+                      Upload an MRI image and click Analyze
+                      MRI to see the classification result.
                     </p>
 
+                  </div>
+                ) : (
+                  <div className="result-content">
+
+                    <div className="prediction-main">
+
+                      <div className="prediction-icon">
+                        ✓
+                      </div>
+
+                      <div>
+                        <span className="prediction-label">
+                          PREDICTED CLASS
+                        </span>
+
+                        <h3>{result.prediction}</h3>
+
+                        {showConfidence && (
+                          <p>
+                            Confidence:{" "}
+                            <strong>
+                              {result.confidence.toFixed(2)}%
+                            </strong>
+                          </p>
+                        )}
+                      </div>
+
+                    </div>
+
+                    <div className="probability-section">
+
+                      <div className="probability-heading">
+                        <span>Class probabilities</span>
+                        <span>Confidence</span>
+                      </div>
+
+                      {CLASS_NAMES.map((className) => {
+                        const value =
+                          result.probabilities[className] || 0;
+
+                        return (
+                          <div
+                            className="probability-row"
+                            key={className}
+                          >
+                            <div className="probability-label">
+                              {className}
+                            </div>
+
+                            <div className="probability-track">
+                              <div
+                                className={`probability-fill ${
+                                  className === result.prediction
+                                    ? "selected"
+                                    : ""
+                                }`}
+                                style={{
+                                  width: `${Math.max(
+                                    value,
+                                    0
+                                  )}%`,
+                                }}
+                              />
+                            </div>
+
+                            <div className="probability-value">
+                              {value.toFixed(2)}%
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                    </div>
+
+                    <div className="result-file">
+                      <span>File</span>
+                      <strong>{result.filename}</strong>
+                    </div>
+
+                    <div className="medical-note">
+                      <strong>Important:</strong> This tool is for
+                      educational and research purposes only. It
+                      does not provide a medical diagnosis.
+                    </div>
+
                     <button
-                      className="analyze-button"
-                      onClick={analyzeMRI}
-                      disabled={!file || loading}
+                      className="secondary-button full"
+                      onClick={clearAnalysis}
                     >
-                      {loading ? (
-                        <>
-                          <span className="spinner"></span>
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          ✦ Analyze MRI Scan
-                          <span>→</span>
-                        </>
-                      )}
+                      Analyze Another MRI
                     </button>
 
                   </div>
-
-                ) : (
-
-                  <div className="result-content">
-
-                    <div className="result-title">
-                      <div>
-                        <span className="card-kicker">
-                          ANALYSIS COMPLETE
-                        </span>
-
-                        <h3>
-                          Predicted Class
-                        </h3>
-                      </div>
-
-                      <span className="completed">
-                        ✓ Complete
-                      </span>
-                    </div>
-
-                    <div className="result-main">
-
-                      <div className="result-prediction">
-
-                        <span>
-                          AI CLASSIFICATION
-                        </span>
-
-                        <strong>
-                          {result.prediction}
-                        </strong>
-
-                        <small>
-                          {getConfidenceLevel(
-                            result.confidence
-                          )}
-                        </small>
-
-                      </div>
-
-                      <div
-                        className="confidence-circle"
-                        style={{
-                          background: `conic-gradient(#1688d4 ${
-                            result.confidence * 3.6
-                          }deg, #e8eef5 0deg)`,
-                        }}
-                      >
-                        <div>
-                          <strong>
-                            {result.confidence}%
-                          </strong>
-
-                          <span>
-                            Confidence
-                          </span>
-                        </div>
-                      </div>
-
-                    </div>
-
-                    <div className="result-bars">
-
-                      {Object.entries(
-                        result.probabilities
-                      ).map(([name, value]) => (
-
-                        <div
-                          className="result-bar-item"
-                          key={name}
-                        >
-
-                          <div>
-                            <span>{name}</span>
-                            <strong>
-                              {value}%
-                            </strong>
-                          </div>
-
-                          <div className="result-track">
-                            <span
-                              className={
-                                name === result.prediction
-                                  ? "highlight"
-                                  : ""
-                              }
-                              style={{
-                                width: `${value}%`,
-                              }}
-                            ></span>
-                          </div>
-
-                        </div>
-
-                      ))}
-
-                    </div>
-
-                  </div>
-
                 )}
 
               </div>
 
             </div>
 
-            {error && (
-              <div className="error-box">
-                <span>!</span>
-                {error}
-              </div>
-            )}
-
-            {file && !result && (
-              <div className="selected-file">
-                <div className="file-image">IMG</div>
-
-                <div>
-                  <span>Selected scan</span>
-                  <strong>{file.name}</strong>
-                </div>
-
-                <span className="ready-badge">
-                  ✓ Ready
-                </span>
-              </div>
-            )}
-
           </section>
+        )}
 
+        {/* HISTORY */}
+        {page === "history" && (
+          <section className="page-content">
 
-          {/* RECENT SCANS */}
-          <section className="dashboard-card recent-card">
-
-            <div className="card-header">
-
+            <div className="page-heading">
               <div>
-                <span className="card-kicker">
-                  HISTORY
-                </span>
+                <div className="eyebrow">ANALYSIS RECORDS</div>
 
-                <h2>
-                  Recent MRI Scans
-                </h2>
+                <h1>Analysis History</h1>
 
                 <p>
-                  Latest classification activity
+                  Previous MRI classifications saved in this
+                  browser.
                 </p>
               </div>
-
-              <button className="view-all">
-                View all →
-              </button>
-
             </div>
 
-            <div className="table-wrapper">
+            <div className="card history-card">
 
-              <table>
+              {history.length === 0 ? (
+                <div className="empty-history">
 
-                <thead>
-                  <tr>
-                    <th>SCAN ID</th>
-                    <th>DATE</th>
-                    <th>PREDICTION</th>
-                    <th>CONFIDENCE</th>
-                    <th>STATUS</th>
-                    <th>ACTION</th>
-                  </tr>
-                </thead>
+                  <div className="empty-icon">↺</div>
 
-                <tbody>
+                  <h3>No analysis history</h3>
 
-                  <tr>
-                    <td>
-                      <strong>MRI-1024</strong>
-                    </td>
-                    <td>Sep 25, 2026</td>
-                    <td>
-                      <span className="prediction-tag">
-                        Glioma
-                      </span>
-                    </td>
-                    <td>96.20%</td>
-                    <td>
-                      <span className="status-complete">
-                        ● Completed
-                      </span>
-                    </td>
-                    <td>
-                      <button className="table-action">
-                        View
-                      </button>
-                    </td>
-                  </tr>
+                  <p>
+                    Your completed MRI analyses will appear here.
+                  </p>
 
-                  <tr>
-                    <td>
-                      <strong>MRI-1023</strong>
-                    </td>
-                    <td>Sep 25, 2026</td>
-                    <td>
-                      <span className="prediction-tag">
-                        No Tumor
-                      </span>
-                    </td>
-                    <td>94.70%</td>
-                    <td>
-                      <span className="status-complete">
-                        ● Completed
-                      </span>
-                    </td>
-                    <td>
-                      <button className="table-action">
-                        View
-                      </button>
-                    </td>
-                  </tr>
+                  <button
+                    className="primary-button"
+                    onClick={() => navigate("analysis")}
+                  >
+                    Start MRI Analysis
+                  </button>
 
-                  <tr>
-                    <td>
-                      <strong>MRI-1022</strong>
-                    </td>
-                    <td>Sep 24, 2026</td>
-                    <td>
-                      <span className="prediction-tag">
-                        Meningioma
-                      </span>
-                    </td>
-                    <td>88.40%</td>
-                    <td>
-                      <span className="status-complete">
-                        ● Completed
-                      </span>
-                    </td>
-                    <td>
-                      <button className="table-action">
-                        View
-                      </button>
-                    </td>
-                  </tr>
+                </div>
+              ) : (
+                <div className="history-table-wrapper">
 
-                  <tr>
-                    <td>
-                      <strong>MRI-1021</strong>
-                    </td>
-                    <td>Sep 24, 2026</td>
-                    <td>
-                      <span className="prediction-tag">
-                        Pituitary
-                      </span>
-                    </td>
-                    <td>91.30%</td>
-                    <td>
-                      <span className="status-complete">
-                        ● Completed
-                      </span>
-                    </td>
-                    <td>
-                      <button className="table-action">
-                        View
-                      </button>
-                    </td>
-                  </tr>
+                  <table className="history-table">
 
-                </tbody>
+                    <thead>
+                      <tr>
+                        <th>File</th>
+                        <th>Prediction</th>
+                        <th>Confidence</th>
+                        <th>Date</th>
+                      </tr>
+                    </thead>
 
-              </table>
+                    <tbody>
+                      {history.map((item) => (
+                        <tr key={item.id}>
+                          <td>
+                            <div className="history-file">
+                              <span>◉</span>
+                              {item.filename}
+                            </div>
+                          </td>
+
+                          <td>
+                            <span className="prediction-tag">
+                              {item.prediction}
+                            </span>
+                          </td>
+
+                          <td>
+                            <strong>
+                              {item.confidence.toFixed(2)}%
+                            </strong>
+                          </td>
+
+                          <td>{item.date}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+
+                  </table>
+
+                </div>
+              )}
 
             </div>
 
           </section>
+        )}
 
+        {/* SETTINGS */}
+        {page === "settings" && (
+          <section className="page-content">
 
-          {/* DISCLAIMER */}
-          <div className="medical-disclaimer">
+            <div className="page-heading">
+              <div>
+                <div className="eyebrow">SYSTEM CONFIGURATION</div>
 
-            <div className="disclaimer-symbol">
-              !
+                <h1>Settings</h1>
+
+                <p>
+                  Manage your NeuroScan dashboard preferences.
+                </p>
+              </div>
             </div>
 
-            <div>
-              <strong>
-                Educational & Research Use Only
-              </strong>
+            <div className="settings-grid">
 
-              <p>
-                NeuroScan AI is intended for educational and
-                research purposes. AI predictions are not
-                medical diagnoses and should not replace
-                professional medical evaluation, advice,
-                or treatment.
-              </p>
+              <div className="card settings-card">
+
+                <div className="card-header">
+                  <div>
+                    <h2>Display Settings</h2>
+                    <p>Customize analysis result visibility</p>
+                  </div>
+                </div>
+
+                <div className="setting-row">
+
+                  <div>
+                    <strong>Show confidence scores</strong>
+
+                    <p>
+                      Display model confidence percentages
+                      alongside predictions.
+                    </p>
+                  </div>
+
+                  <button
+                    className={`toggle ${
+                      showConfidence ? "enabled" : ""
+                    }`}
+                    onClick={() =>
+                      setShowConfidence((value) => !value)
+                    }
+                  >
+                    <span />
+                  </button>
+
+                </div>
+
+              </div>
+
+              <div className="card settings-card">
+
+                <div className="card-header">
+                  <div>
+                    <h2>Model Configuration</h2>
+                    <p>Current AI classifier details</p>
+                  </div>
+                </div>
+
+                <div className="settings-details">
+
+                  <div>
+                    <span>Model</span>
+                    <strong>MobileNetV2</strong>
+                  </div>
+
+                  <div>
+                    <span>Framework</span>
+                    <strong>TensorFlow</strong>
+                  </div>
+
+                  <div>
+                    <span>Input Size</span>
+                    <strong>224 × 224</strong>
+                  </div>
+
+                  <div>
+                    <span>Classes</span>
+                    <strong>4</strong>
+                  </div>
+
+                  <div>
+                    <span>Test Accuracy</span>
+                    <strong>84.44%</strong>
+                  </div>
+
+                  <div>
+                    <span>API Status</span>
+                    <strong className="api-text">
+                      {apiOnline ? "Connected" : "Offline"}
+                    </strong>
+                  </div>
+
+                </div>
+
+              </div>
+
             </div>
 
-          </div>
+          </section>
+        )}
 
-        </main>
-
-        <footer className="dashboard-footer">
-          <span>
-            NeuroScan AI · MobileNetV2 · TensorFlow · FastAPI · React
-          </span>
-
-          <span>
-            © 2026 NeuroScan AI
-          </span>
+        <footer className="footer">
+          NeuroScan AI • Brain MRI Classification Dashboard
         </footer>
 
-      </div>
-
+      </main>
     </div>
   );
+}
+
+function createDonutGradient(
+  distribution: { name: string; count: number }[]
+) {
+  const total = distribution.reduce(
+    (sum, item) => sum + item.count,
+    0
+  );
+
+  if (!total) {
+    return "conic-gradient(#e8edf5 0deg 360deg)";
+  }
+
+  let current = 0;
+
+  const colors = [
+    "#315efb",
+    "#8b5cf6",
+    "#10b981",
+    "#f59e0b",
+  ];
+
+  const parts = distribution.map((item, index) => {
+    const start = current;
+    const end = current + (item.count / total) * 360;
+
+    current = end;
+
+    return `${colors[index]} ${start}deg ${end}deg`;
+  });
+
+  return `conic-gradient(${parts.join(", ")})`;
 }
 
 export default App;
