@@ -11,3 +11,8 @@ body,
 body {
   margin: 0;
 }
+
+::selection {
+  background: #cceeff;
+  color: #082746;
+}

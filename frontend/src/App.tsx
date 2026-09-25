@@ -36,7 +36,7 @@ function App() {
 
   const analyzeMRI = async () => {
     if (!file) {
-      setError("Please select an MRI image first.");
+      setError("Please upload an MRI image before starting the analysis.");
       return;
     }
 
@@ -67,7 +67,7 @@ function App() {
       if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError("Unable to connect to the API.");
+        setError("Unable to connect to the FastAPI server.");
       }
     } finally {
       setLoading(false);
@@ -81,71 +81,161 @@ function App() {
     setError("");
   };
 
+  const getConfidenceLevel = (confidence: number) => {
+    if (confidence >= 90) return "High confidence";
+    if (confidence >= 70) return "Moderate confidence";
+    return "Low confidence";
+  };
+
   return (
     <div className="app">
 
-      {/* NAVBAR */}
+      {/* ================= NAVBAR ================= */}
 
       <nav className="navbar">
-        <div className="nav-inner">
 
-          <div className="brand">
-            <div className="brand-icon">✚</div>
+        <div className="nav-container">
 
-            <div>
-              <strong>NeuroScan AI</strong>
-              <span>Brain MRI Analysis</span>
+          <a className="brand" href="#top">
+
+            <div className="brand-mark">
+              <span>+</span>
             </div>
+
+            <div className="brand-text">
+              <strong>NeuroScan</strong>
+              <span>AI MEDICAL IMAGING</span>
+            </div>
+
+          </a>
+
+          <div className="nav-links">
+            <a href="#analysis">Analysis</a>
+            <a href="#model">Model</a>
+            <a href="#workflow">How it works</a>
           </div>
 
-          <div className="nav-status">
-            <span className="status-dot"></span>
-            API Connected
+          <div className="api-status">
+            <span className="status-indicator"></span>
+            <span>API Online</span>
           </div>
 
         </div>
+
       </nav>
 
 
-      {/* HERO */}
+      {/* ================= HERO ================= */}
 
-      <header className="hero">
+      <header className="hero" id="top">
 
-        <div className="hero-content">
+        <div className="hero-glow glow-one"></div>
+        <div className="hero-glow glow-two"></div>
 
-          <div className="hero-badge">
-            <span>✦</span>
-            AI-POWERED MEDICAL IMAGING
+        <div className="hero-container">
+
+          <div className="hero-content">
+
+            <div className="hero-label">
+              <span className="spark">✦</span>
+              AI-POWERED BRAIN MRI CLASSIFICATION
+            </div>
+
+            <h1>
+              Intelligent
+              <span>Brain Imaging.</span>
+            </h1>
+
+            <p>
+              Upload a brain MRI scan and analyze it with a
+              trained MobileNetV2 deep learning model.
+              Get a classification and probability distribution
+              in seconds.
+            </p>
+
+            <div className="hero-actions">
+
+              <a href="#analysis" className="primary-hero-button">
+                Start Analysis
+                <span>→</span>
+              </a>
+
+              <a href="#model" className="secondary-hero-button">
+                Explore Model
+              </a>
+
+            </div>
+
           </div>
 
-          <h1>
-            Brain MRI
-            <span>Classification</span>
-          </h1>
 
-          <p>
-            Analyze brain MRI images using a trained
-            MobileNetV2 deep learning model and receive
-            an instant classification across four categories.
-          </p>
+          {/* HERO VISUAL */}
 
-          <div className="hero-stats">
+          <div className="hero-visual">
 
-            <div>
-              <strong>4</strong>
-              <span>Classes</span>
+            <div className="scan-orbit orbit-one"></div>
+            <div className="scan-orbit orbit-two"></div>
+
+            <div className="brain-visual">
+
+              <div className="brain-lines">
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+
+              <div className="brain-symbol">
+                🧠
+              </div>
+
+              <div className="scan-line"></div>
+
             </div>
 
-            <div>
-              <strong>224×224</strong>
-              <span>Input Size</span>
+            <div className="floating-card floating-top">
+              <div className="floating-icon">AI</div>
+              <div>
+                <strong>MobileNetV2</strong>
+                <span>Deep Learning Model</span>
+              </div>
             </div>
 
-            <div>
-              <strong>84.44%</strong>
-              <span>Test Accuracy</span>
+            <div className="floating-card floating-bottom">
+              <span className="mini-dot"></span>
+              <div>
+                <strong>4 Classes</strong>
+                <span>Classification Ready</span>
+              </div>
             </div>
 
+          </div>
+
+        </div>
+
+
+        {/* HERO STATS */}
+
+        <div className="hero-metrics">
+
+          <div className="metric">
+            <strong>84.44%</strong>
+            <span>Test Accuracy</span>
+          </div>
+
+          <div className="metric">
+            <strong>4</strong>
+            <span>Detection Classes</span>
+          </div>
+
+          <div className="metric">
+            <strong>224×224</strong>
+            <span>Input Resolution</span>
+          </div>
+
+          <div className="metric">
+            <strong>AI</strong>
+            <span>Deep Learning</span>
           </div>
 
         </div>
@@ -153,27 +243,35 @@ function App() {
       </header>
 
 
-      {/* MAIN */}
+      {/* ================= MAIN ================= */}
 
       <main className="main-container">
 
-        {/* UPLOAD SECTION */}
 
-        <section className="workspace">
+        {/* ================= ANALYSIS ================= */}
 
-          <div className="workspace-header">
+        <section
+          className="analysis-section"
+          id="analysis"
+        >
+
+          <div className="section-header">
 
             <div>
-              <div className="eyebrow">
+
+              <div className="section-kicker">
                 ANALYSIS WORKSPACE
               </div>
 
-              <h2>Upload MRI Scan</h2>
+              <h2>
+                Analyze your MRI scan
+              </h2>
 
               <p>
-                Select a brain MRI image to begin the
-                classification process.
+                Upload a supported brain MRI image to
+                begin AI-powered classification.
               </p>
+
             </div>
 
             {file && (
@@ -181,228 +279,313 @@ function App() {
                 className="reset-button"
                 onClick={resetScan}
               >
-                ↻ New Scan
+                <span>↻</span>
+                New Scan
               </button>
             )}
 
           </div>
 
 
-          <label className="upload-box">
+          <div className="analysis-card">
 
-            {preview ? (
+            {/* UPLOAD */}
 
-              <div className="preview-wrapper">
+            <label
+              className={`upload-zone ${
+                preview ? "has-preview" : ""
+              }`}
+            >
 
-                <img
-                  src={preview}
-                  alt="Uploaded MRI"
-                  className="preview-image"
-                />
+              {preview ? (
 
-                <div className="preview-overlay">
-                  <span>MRI Preview</span>
+                <div className="preview-container">
+
+                  <img
+                    src={preview}
+                    alt="Uploaded brain MRI preview"
+                    className="mri-preview"
+                  />
+
+                  <div className="preview-badge">
+                    <span>✓</span>
+                    MRI Loaded
+                  </div>
+
+                  <div className="preview-change">
+                    Click to replace image
+                  </div>
+
                 </div>
 
-              </div>
+              ) : (
 
-            ) : (
+                <div className="upload-content">
 
-              <div className="upload-placeholder">
+                  <div className="upload-icon-wrapper">
 
-                <div className="upload-circle">
-                  <span>↑</span>
+                    <div className="upload-icon">
+                      ↑
+                    </div>
+
+                  </div>
+
+                  <h3>
+                    Upload your MRI scan
+                  </h3>
+
+                  <p>
+                    Drag & drop your image here or
+                    <strong> browse files</strong>
+                  </p>
+
+                  <div className="supported-formats">
+
+                    <span>JPG</span>
+                    <span>JPEG</span>
+                    <span>PNG</span>
+
+                  </div>
+
+                  <small>
+                    Supported image formats
+                  </small>
+
                 </div>
 
-                <h3>Drop your MRI scan here</h3>
+              )}
 
-                <p>
-                  or click to browse from your computer
-                </p>
+              <input
+                type="file"
+                accept=".jpg,.jpeg,.png"
+                onChange={handleFileChange}
+              />
 
-                <div className="file-types">
-                  <span>JPG</span>
-                  <span>JPEG</span>
-                  <span>PNG</span>
-                  <small>Maximum supported image formats</small>
+            </label>
+
+
+            {/* FILE INFO */}
+
+            {file && (
+
+              <div className="file-information">
+
+                <div className="file-left">
+
+                  <div className="file-thumbnail">
+                    IMG
+                  </div>
+
+                  <div className="file-details">
+
+                    <span>Selected image</span>
+
+                    <strong>
+                      {file.name}
+                    </strong>
+
+                  </div>
+
+                </div>
+
+                <div className="file-ready">
+                  <span>✓</span>
+                  Ready
                 </div>
 
               </div>
 
             )}
 
-            <input
-              type="file"
-              accept=".jpg,.jpeg,.png"
-              onChange={handleFileChange}
-            />
 
-          </label>
+            {/* ANALYZE BUTTON */}
+
+            <button
+              className="analyze-button"
+              onClick={analyzeMRI}
+              disabled={loading || !file}
+            >
+
+              {loading ? (
+                <>
+                  <span className="loading-spinner"></span>
+                  Processing MRI...
+                </>
+              ) : (
+                <>
+                  <span className="button-ai">✦</span>
+                  Analyze MRI Scan
+                  <span className="button-arrow">→</span>
+                </>
+              )}
+
+            </button>
 
 
-          {/* FILE INFORMATION */}
+            {error && (
 
-          {file && (
+              <div className="error-box">
 
-            <div className="file-card">
+                <div className="error-icon">
+                  !
+                </div>
 
-              <div className="file-icon">
-                IMG
+                <span>{error}</span>
+
               </div>
 
-              <div className="file-info">
-                <span>Selected MRI scan</span>
-                <strong>{file.name}</strong>
-              </div>
-
-              <div className="file-check">
-                ✓
-              </div>
-
-            </div>
-
-          )}
-
-
-          {/* ANALYZE */}
-
-          <button
-            className="analyze-button"
-            onClick={analyzeMRI}
-            disabled={loading || !file}
-          >
-
-            {loading ? (
-              <>
-                <span className="spinner"></span>
-                Analyzing MRI...
-              </>
-            ) : (
-              <>
-                Analyze MRI Scan
-                <span className="button-arrow">→</span>
-              </>
             )}
 
-          </button>
-
-
-          {error && (
-            <div className="error-message">
-              <span>!</span>
-              {error}
-            </div>
-          )}
+          </div>
 
         </section>
 
 
-        {/* RESULT */}
+        {/* ================= RESULTS ================= */}
 
         {result && (
 
           <section className="results-section">
 
-            <div className="results-heading">
+            <div className="results-header">
 
               <div>
-                <div className="eyebrow">
+
+                <div className="section-kicker">
                   ANALYSIS COMPLETE
                 </div>
 
-                <h2>Classification Result</h2>
+                <h2>
+                  Classification results
+                </h2>
+
               </div>
 
-              <div className="result-status">
-                ✓ Prediction Generated
+              <div className="completed-badge">
+                <span>✓</span>
+                Analysis Complete
               </div>
 
             </div>
 
 
-            <div className="result-grid">
+            <div className="results-grid">
 
-              {/* MAIN RESULT */}
 
-              <div className="result-main">
+              {/* RESULT CARD */}
 
-                <div className="result-icon">
-                  ✦
+              <div className="prediction-card">
+
+                <div className="prediction-card-top">
+
+                  <div className="prediction-icon">
+                    ✦
+                  </div>
+
+                  <span className="prediction-label">
+                    PREDICTED CLASS
+                  </span>
+
                 </div>
-
-                <span className="result-caption">
-                  DETECTED CLASS
-                </span>
 
                 <h3>
                   {result.prediction}
                 </h3>
 
                 <p>
-                  The model classified the uploaded MRI
-                  image as <strong>{result.prediction}</strong>.
+                  The AI model identified this image as
+                  <strong> {result.prediction}</strong>.
                 </p>
 
-                <div className="confidence">
 
-                  <div className="confidence-top">
-                    <span>Model Confidence</span>
-                    <strong>{result.confidence}%</strong>
+                <div className="confidence-area">
+
+                  <div className="confidence-header">
+
+                    <span>
+                      Model confidence
+                    </span>
+
+                    <strong>
+                      {result.confidence}%
+                    </strong>
+
                   </div>
 
-                  <div className="confidence-track">
+                  <div className="confidence-bar">
+
                     <div
-                      className="confidence-fill"
+                      className="confidence-progress"
                       style={{
                         width: `${result.confidence}%`,
                       }}
                     />
+
                   </div>
+
+                  <span className="confidence-level">
+                    {getConfidenceLevel(result.confidence)}
+                  </span>
 
                 </div>
 
               </div>
 
 
-              {/* PROBABILITIES */}
+              {/* PROBABILITY CARD */}
 
               <div className="probability-card">
 
-                <div className="card-title">
-                  <div>
-                    <span className="eyebrow">
-                      MODEL OUTPUT
-                    </span>
+                <div className="probability-header-main">
 
-                    <h3>Class Probabilities</h3>
+                  <div>
+
+                    <div className="section-kicker">
+                      MODEL OUTPUT
+                    </div>
+
+                    <h3>
+                      Class probabilities
+                    </h3>
+
                   </div>
 
-                  <span className="chart-icon">
+                  <div className="percent-icon">
                     %
-                  </span>
+                  </div>
+
                 </div>
 
 
-                <div className="probabilities">
+                <div className="probability-list">
 
                   {Object.entries(
                     result.probabilities
                   ).map(([name, value]) => (
 
                     <div
-                      className="probability-row"
+                      className="probability-item"
                       key={name}
                     >
 
-                      <div className="probability-label">
+                      <div className="probability-name">
+
                         <span>{name}</span>
-                        <strong>{value}%</strong>
+
+                        <strong>
+                          {value}%
+                        </strong>
+
                       </div>
 
                       <div className="probability-track">
 
                         <div
-                          className="probability-fill"
+                          className={`probability-progress ${
+                            name === result.prediction
+                              ? "active"
+                              : ""
+                          }`}
                           style={{
                             width: `${value}%`,
                           }}
@@ -425,109 +608,141 @@ function App() {
         )}
 
 
-        {/* MODEL INFORMATION */}
+        {/* ================= MODEL ================= */}
 
-        <section className="info-section">
+        <section
+          className="model-section"
+          id="model"
+        >
 
-          <div className="section-title">
+          <div className="section-header model-heading">
 
-            <div className="eyebrow">
-              MODEL INFORMATION
+            <div>
+
+              <div className="section-kicker">
+                THE TECHNOLOGY
+              </div>
+
+              <h2>
+                Built with modern AI
+              </h2>
+
+              <p>
+                A lightweight deep learning pipeline designed
+                for efficient image classification.
+              </p>
+
             </div>
-
-            <h2>
-              Built for efficient image classification
-            </h2>
-
-            <p>
-              This application uses a lightweight deep learning
-              architecture optimized for image classification.
-            </p>
 
           </div>
 
 
-          <div className="info-grid">
+          <div className="model-grid">
 
-            <div className="info-card">
 
-              <div className="info-number">
+            <div className="technology-card featured-tech">
+
+              <div className="tech-number">
                 01
               </div>
 
-              <div className="info-card-icon">
+              <div className="tech-icon">
                 AI
               </div>
 
-              <h3>MobileNetV2</h3>
+              <h3>
+                MobileNetV2
+              </h3>
 
               <p>
-                Lightweight convolutional neural network
-                architecture designed for efficient image
+                A lightweight convolutional neural network
+                architecture optimized for efficient image
                 classification.
               </p>
 
+              <div className="tech-tag">
+                Deep Learning
+              </div>
+
             </div>
 
 
-            <div className="info-card">
+            <div className="technology-card">
 
-              <div className="info-number">
+              <div className="tech-number">
                 02
               </div>
 
-              <div className="info-card-icon">
+              <div className="tech-icon">
                 224
               </div>
 
-              <h3>Image Processing</h3>
+              <h3>
+                Image Processing
+              </h3>
 
               <p>
-                Uploaded MRI images are resized to
-                224×224 pixels and processed using the
-                MobileNetV2 preprocessing pipeline.
+                Every uploaded MRI is resized to 224×224
+                pixels and processed using the MobileNetV2
+                preprocessing pipeline.
               </p>
+
+              <div className="tech-tag">
+                Computer Vision
+              </div>
 
             </div>
 
 
-            <div className="info-card">
+            <div className="technology-card">
 
-              <div className="info-number">
+              <div className="tech-number">
                 03
               </div>
 
-              <div className="info-card-icon">
-                4
+              <div className="tech-icon">
+                4×
               </div>
 
-              <h3>Four Classes</h3>
+              <h3>
+                Four Classes
+              </h3>
 
               <p>
-                The model provides probabilities for
+                The model provides probability scores for
                 Glioma, Meningioma, No Tumor and Pituitary.
               </p>
+
+              <div className="tech-tag">
+                Multi-Class
+              </div>
 
             </div>
 
 
-            <div className="info-card">
+            <div className="technology-card">
 
-              <div className="info-number">
+              <div className="tech-number">
                 04
               </div>
 
-              <div className="info-card-icon">
+              <div className="tech-icon">
                 API
               </div>
 
-              <h3>FastAPI Backend</h3>
+              <h3>
+                FastAPI Backend
+              </h3>
 
               <p>
-                React communicates with a FastAPI REST
-                API that processes the MRI and returns
-                model predictions.
+                A FastAPI REST API handles image processing,
+                model inference and structured prediction
+                responses.
               </p>
+
+              <div className="tech-tag">
+                REST API
+              </div>
 
             </div>
 
@@ -536,76 +751,99 @@ function App() {
         </section>
 
 
-        {/* HOW IT WORKS */}
+        {/* ================= WORKFLOW ================= */}
 
-        <section className="how-section">
+        <section
+          className="workflow-section"
+          id="workflow"
+        >
 
-          <div className="section-title centered">
+          <div className="section-title-centered">
 
-            <div className="eyebrow">
-              WORKFLOW
+            <div className="section-kicker">
+              SIMPLE WORKFLOW
             </div>
 
-            <h2>How it works</h2>
+            <h2>
+              From MRI to insight
+            </h2>
 
             <p>
-              A simple three-step AI-powered analysis workflow.
+              Three simple steps power the classification pipeline.
             </p>
 
           </div>
 
 
-          <div className="steps">
+          <div className="workflow">
 
-            <div className="step">
+            <div className="workflow-step">
 
-              <div className="step-number">
-                1
+              <div className="workflow-number">
+                01
               </div>
 
-              <h3>Upload</h3>
+              <div className="workflow-content">
 
-              <p>
-                Select a JPG, JPEG or PNG brain MRI scan.
-              </p>
+                <h3>
+                  Upload
+                </h3>
+
+                <p>
+                  Select a JPG, JPEG or PNG brain MRI image.
+                </p>
+
+              </div>
 
             </div>
 
 
-            <div className="step-line"></div>
+            <div className="workflow-connector"></div>
 
 
-            <div className="step">
+            <div className="workflow-step">
 
-              <div className="step-number">
-                2
+              <div className="workflow-number">
+                02
               </div>
 
-              <h3>Analyze</h3>
+              <div className="workflow-content">
 
-              <p>
-                FastAPI sends the image to the trained
-                MobileNetV2 model.
-              </p>
+                <h3>
+                  Process
+                </h3>
+
+                <p>
+                  FastAPI preprocesses the image and sends
+                  it to the trained model.
+                </p>
+
+              </div>
 
             </div>
 
 
-            <div className="step-line"></div>
+            <div className="workflow-connector"></div>
 
 
-            <div className="step">
+            <div className="workflow-step">
 
-              <div className="step-number">
-                3
+              <div className="workflow-number">
+                03
               </div>
 
-              <h3>Result</h3>
+              <div className="workflow-content">
 
-              <p>
-                View the predicted class and probability
-                distribution.
-              </p>
+                <h3>
+                  Classify
+                </h3>
+
+                <p>
+                  View the predicted class and complete
+                  probability distribution.
+                </p>
+
+              </div>
 
             </div>
 
@@ -614,11 +852,11 @@ function App() {
         </section>
 
 
-        {/* DISCLAIMER */}
+        {/* ================= DISCLAIMER ================= */}
 
         <section className="disclaimer">
 
-          <div className="disclaimer-symbol">
+          <div className="disclaimer-icon">
             !
           </div>
 
@@ -629,10 +867,11 @@ function App() {
             </strong>
 
             <p>
-              This application is intended for educational
-              and research purposes only. It is not a medical
-              diagnostic tool and should not replace evaluation
-              or advice from a qualified healthcare professional.
+              NeuroScan AI is designed for educational and
+              research purposes. The predictions generated
+              by this application are not medical diagnoses
+              and should not replace professional medical
+              evaluation, advice or treatment.
             </p>
 
           </div>
@@ -642,26 +881,34 @@ function App() {
       </main>
 
 
-      {/* FOOTER */}
+      {/* ================= FOOTER ================= */}
 
       <footer className="footer">
 
-        <div className="footer-brand">
-          <div className="brand-icon">✚</div>
+        <div className="footer-container">
 
-          <div>
-            <strong>NeuroScan AI</strong>
-            <span>Brain MRI Classification</span>
+          <div className="footer-brand">
+
+            <div className="brand-mark small">
+              +
+            </div>
+
+            <div>
+              <strong>NeuroScan</strong>
+              <span>AI Medical Imaging</span>
+            </div>
+
           </div>
+
+          <div className="footer-tech">
+            MobileNetV2 · TensorFlow · FastAPI · React
+          </div>
+
+          <div className="footer-copy">
+            © 2026 NeuroScan AI
+          </div>
+
         </div>
-
-        <p>
-          MobileNetV2 • FastAPI • React • TypeScript
-        </p>
-
-        <span>
-          © 2026 Brain Tumor MRI Classifier
-        </span>
 
       </footer>
 
