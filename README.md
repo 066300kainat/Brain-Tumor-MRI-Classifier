@@ -1,128 +1,108 @@
-\# 🧠 Brain Tumor MRI Classifier
+# 🧠 Brain Tumor MRI Classifier
 
+An AI-powered Brain Tumor MRI Classification project that uses a trained **MobileNetV2 deep learning model** to classify brain MRI scans into four categories:
 
+- Glioma
+- Meningioma
+- No Tumor
+- Pituitary
 
-An AI-powered web application that classifies brain MRI images into four categories using a trained MobileNetV2 deep learning model.
+The project includes a **Streamlit interface**, a **FastAPI REST API**, and a **React + TypeScript frontend**.
 
+---
 
+## 🚀 Project Overview
 
-The application provides a simple and interactive Streamlit interface where users can upload an MRI image, run the trained model, and view the predicted class along with the model's confidence and probability distribution.
+This project demonstrates an end-to-end AI medical imaging workflow:
 
+1. Upload a brain MRI image.
+2. Process the image using MobileNetV2 preprocessing.
+3. Run the trained deep learning model.
+4. Classify the MRI into one of four categories.
+5. Display prediction confidence and class probabilities.
+6. Access the same prediction functionality through a REST API.
+7. Use a modern React frontend connected to the FastAPI backend.
 
+> ⚠️ **Educational / Research Use Only:**  
+> This project is intended for educational and research purposes. It is not a medical diagnosis tool and should not replace professional medical advice.
 
-\---
+---
 
+## 🛠️ Technologies Used
 
+### Machine Learning
 
-\## 🚀 Features
+- Python
+- TensorFlow
+- Keras
+- MobileNetV2
+- NumPy
+- Pillow
+- Scikit-learn
 
+### Backend
 
+- FastAPI
+- Uvicorn
+- Python
+- REST API
+- CORS
+- Multipart File Upload
 
-\- 🧠 Brain MRI image classification
+### Frontend
 
-\- 📤 Upload JPG, JPEG, and PNG images
+- React
+- TypeScript
+- Vite
+- CSS
+- Fetch API
 
-\- 🤖 MobileNetV2 transfer learning model
+### Original UI
 
-\- 📊 Four-class classification
+- Streamlit
 
-\- 📈 Prediction confidence
+---
 
-\- 📉 Probability distribution for all classes
-
-\- 🖼️ MRI image preview
-
-\- ⚡ Interactive Streamlit interface
-
-\- 📱 Responsive and clean UI
-
-\- ⚠️ Medical-use disclaimer
-
-
-
-\---
-
-
-
-\## 🎯 Classification Classes
-
-
-
-The model classifies MRI images into four categories:
-
-
-
-| Class | Description |
-
-|---|---|
-
-| Glioma | Glioma tumor category |
-
-| Meningioma | Meningioma tumor category |
-
-| No Tumor | No tumor detected by the model |
-
-| Pituitary | Pituitary tumor category |
-
-
-
-\---
-
-
-
-\## 🛠️ Technologies Used
-
-
-
-\- Python
-
-\- TensorFlow
-
-\- Keras
-
-\- MobileNetV2
-
-\- NumPy
-
-\- Pillow
-
-\- Streamlit
-
-
-
-\---
-
-
-
-\## 🧠 Model
-
-
-
-The application uses \*\*MobileNetV2\*\* with transfer learning for image classification.
-
-
-
-\### Model Configuration
-
-
-
-\- \*\*Architecture:\*\* MobileNetV2
-
-\- \*\*Input Size:\*\* 224 × 224
-
-\- \*\*Number of Classes:\*\* 4
-
-\- \*\*Test Accuracy:\*\* 84.44%
-
-\- \*\*Preprocessing:\*\* MobileNetV2 `preprocess\_input`
-
-
-
-The trained model is loaded from:
-
-
+## 📂 Project Structure
 
 ```text
-
-model/brain\_tumor\_model.keras
-
+Brain-Tumor-MRI-Classifier/
+│
+├── backend/
+│   ├── __init__.py
+│   ├── main.py
+│   └── prediction.py
+│
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx
+│   │   ├── App.css
+│   │   └── index.css
+│   ├── public/
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── vite.config.ts
+│
+├── model/
+│   └── brain_tumor_model.keras
+│
+├── dataset/
+│   ├── Training/
+│   │   ├── glioma/
+│   │   ├── meningioma/
+│   │   ├── notumor/
+│   │   └── pituitary/
+│   │
+│   └── Testing/
+│       ├── glioma/
+│       ├── meningioma/
+│       ├── notumor/
+│       └── pituitary/
+│
+├── app.py
+├── train.py
+├── evaluate.py
+├── check_dataset.py
+├── visualize_dataset.py
+├── requirements.txt
+└── README.md
